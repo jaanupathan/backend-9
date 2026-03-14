@@ -1,0 +1,275 @@
+# System Architecture
+
+## High-Level Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         CLIENT LAYER                            │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐            │
+│  │   React     │  │   Angular   │  │    Vue      │            │
+│  │   Mobile    │  │   Desktop   │  │   CLI       │            │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘            │
+└─────────┼────────────────┼────────────────┼────────────────────┘
+          │                │                │
+          └────────────────┴────────────────┘
+                           │
+                    HTTP/HTTPS
+                    WebSocket
+                           │
+┌──────────────────────────▼────────────────────────────────────┐
+│                   API GATEWAY LAYER                            │
+│              JavaScript/Node.js (Port 3000)                    │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │  Express.js Server                                        │ │
+│  │  - CORS                                                   │ │
+│  │  - Helmet (Security Headers)                             │ │
+│  │  - Compression                                            │ │
+│  │  - Morgan (Logging)                                      │ │
+│  └──────────────────────────────────────────────────────────┘ │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │  Middleware Layer                                         │ │
+│  │  - JWT Authentication                                     │ │
+│  │  - Rate Limiting                                          │ │
+│  │  - Error Handling                                         │ │
+│  │  - Request Validation                                     │ │
+│  └──────────────────────────────────────────────────────────┘ │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │  Socket.IO Server (Real-time)                            │ │
+│  │  - Event Broadcasting                                     │ │
+│  │  - Room Management                                        │ │
+│  │  - Live Analytics                                         │ │
+│  └──────────────────────────────────────────────────────────┘ │
+└──────────────────────────┬────────────────────────────────────┘
+                           │
+                    HTTP Proxy
+                    JWT Forwarding
+                           │
+┌──────────────────────────▼────────────────────────────────────┐
+│                 APPLICATION LAYER                              │
+│            Java Spring Boot (Port 8080)                        │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │  REST Controllers                                         │ │
+│  │  - AuthController                                         │ │
+│  │  - AnalyticsController                                    │ │
+│  │  - DashboardController                                    │ │
+│  └──────────────────────────────────────────────────────────┘ │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │  Service Layer                                            │ │
+│  │  - AuthService                                            │ │
+│  │  - AnalyticsService                                       │ │
+│  │  - CustomUserDetailsService                               │ │
+│  └──────────────────────────────────────────────────────────┘ │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │  Security Layer                                           │ │
+│  │  - JWT Token Provider                                     │ │
+│  │  - Auth Token Filter                                      │ │
+│  │  - BCrypt Password Encoder                               │ │
+│  │  - Role-Based Access Control                             │ │
+│  └──────────────────────────────────────────────────────────┘ │
+└──────────────────────────┬────────────────────────────────────┘
+                           │
+                    JPA/Hibernate
+                           │
+┌──────────────────────────▼────────────────────────────────────┐
+│                   DATA ACCESS LAYER                            │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │  Repositories (Spring Data JPA)                          │ │
+│  │  - UserRepository                                        │ │
+│  │  - AnalyticsEventRepository                              │ │
+│  │  - DashboardRepository                                   │ │
+│  │  - RoleRepository                                         │ │
+│  └──────────────────────────────────────────────────────────┘ │
+└──────────────────────────┬────────────────────────────────────┘
+                           │
+                    SQL
+                           │
+┌──────────────────────────▼────────────────────────────────────┐
+│                    DATABASE LAYER                              │
+│              PostgreSQL (Port 5432)                            │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │  Tables                                                    │ │
+│  │  - users                                                  │ │
+│  │  - roles                                                  │ │
+│  │  - user_roles                                             │ │
+│  │  - analytics_events                                       │ │
+│  │  - dashboards                                             │ │
+│  └──────────────────────────────────────────────────────────┘ │
+└───────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Data Flow Diagrams
+
+### 1. User Authentication Flow
+
+```
+Client → JavaScript Gateway → Java Backend → Database
+   │            │                  │            │
+   │──Login────→│                  │            │
+   │            │──Forward───────→│            │
+   │            │                  │──Query───→│
+   │            │                  │←Result───│
+   │            │←Token+User──────│            │
+   │←Auth Response─────────────────────────────│
+```
+
+### 2. Analytics Event Tracking Flow
+
+```
+Client → JavaScript Gateway → Java Backend → Database
+   │            │                  │            │
+   │──Event────→│                  │            │
+   │            │──Validate(JWT)──→│            │
+   │            │──Save Event────→│            │
+   │            │                  │──Insert──→│
+   │            │                  │←Success──│
+   │            │←Event Saved─────│            │
+   │←Ack + Broadcast (WebSocket)────────────────│
+```
+
+### 3. Real-time WebSocket Flow
+
+```
+Client A    Socket.IO Server    Client B
+   │              │                 │
+   │──Connect───→│                 │
+   │              │◄──Connect──────│
+   │←Connected───│                 │
+   │              │──Connected────→│
+   │──Join Room─→│                 │
+   │              │◄──Join Room────│
+   │              │                 │
+   │──Track Ev──→│                 │
+   │              │──Broadcast────→│
+   │←Ack─────────│                 │
+   │              │                 │
+```
+
+---
+
+## Component Interaction Matrix
+
+| Component | Communicates With | Protocol | Purpose |
+|-----------|------------------|----------|---------|
+| JavaScript Gateway | Java Backend | HTTP/REST | API Proxy |
+| JavaScript Gateway | Clients | WebSocket | Real-time Events |
+| Java Backend | Database | JDBC/SQL | Data Persistence |
+| Auth Filter | JWT Provider | In-process | Token Validation |
+| Services | Repositories | JPA | Data Access |
+
+---
+
+## Security Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Security Layers                       │
+├─────────────────────────────────────────────────────────┤
+│  Layer 1: Network Security                               │
+│  - CORS Configuration                                   │
+│  - Rate Limiting                                        │
+│  - IP Whitelisting (optional)                          │
+├─────────────────────────────────────────────────────────┤
+│  Layer 2: Transport Security                             │
+│  - HTTPS/TLS (in production)                           │
+│  - Secure WebSocket (WSS)                              │
+├─────────────────────────────────────────────────────────┤
+│  Layer 3: Application Security                           │
+│  - JWT Authentication                                    │
+│  - Role-Based Access Control (RBAC)                     │
+│  - Input Validation                                     │
+│  - SQL Injection Prevention (JPA)                      │
+├─────────────────────────────────────────────────────────┤
+│  Layer 4: Data Security                                  │
+│  - BCrypt Password Hashing                              │
+│  - Encrypted Tokens                                     │
+│  - Audit Logging                                        │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Deployment Options
+
+### Option 1: Docker Containers
+
+```yaml
+version: '3.8'
+services:
+  postgres:
+    image: postgres:14
+    ports:
+      - "5432:5432"
+  
+  java-backend:
+    build: ./java-backend
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+  
+  javascript-gateway:
+    build: ./javascript-gateway
+    ports:
+      - "3000:3000"
+    depends_on:
+      - java-backend
+```
+
+### Option 2: Cloud Deployment
+
+```
+AWS/GCP/Azure
+├── EC2/Compute Engine (Java Backend)
+├── EC2/Compute Engine (JavaScript Gateway)
+├── RDS/Cloud SQL (PostgreSQL)
+└── Load Balancer
+    ├── Route to Java Backend (/api/analytics/**)
+    └── Route to JavaScript Gateway (/api/auth/**, /socket.io/**)
+```
+
+---
+
+## Scalability Considerations
+
+### Horizontal Scaling
+
+- **Stateless Design**: Both services are stateless
+- **Session Externalization**: JWT tokens (no server-side sessions)
+- **Load Balancer Ready**: Can add multiple instances behind LB
+
+### Vertical Scaling
+
+- **Database Connection Pool**: HikariCP configuration
+- **Async Processing**: Spring @Async for background tasks
+- **Caching Layer**: Ready for Redis/Memcached integration
+
+---
+
+## Monitoring & Observability
+
+```
+┌──────────────────────────────────────────────────────┐
+│              Monitoring Stack                         │
+├──────────────────────────────────────────────────────┤
+│  Application Logs                                    │
+│  - Winston (JavaScript)                             │
+│  - Logback/Spring Boot Actuator (Java)             │
+├──────────────────────────────────────────────────────┤
+│  Metrics                                             │
+│  - Active Users (WebSocket connections)             │
+│  - Request Rate                                      │
+│  - Error Rates                                       │
+│  - Response Times                                    │
+├──────────────────────────────────────────────────────┤
+│  Health Checks                                       │
+│  - /health endpoint                                 │
+│  - Database connectivity                            │
+│  - External service status                          │
+└──────────────────────────────────────────────────────┘
+```
+
+---
+
+This architecture demonstrates enterprise-level system design suitable for high-scale applications!
